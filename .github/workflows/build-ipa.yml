@@ -111,8 +111,11 @@ jobs:
       - name: Dong goi thanh file .ipa
         working-directory: sing-box-for-apple
         run: |
-          APP="$(find build/dd/Build/Products -maxdepth 3 -type d -name 'SFI.app' | head -n 1)"
-          if [ -z "$APP" ]; then
+          APP="build/dd/Build/Products/Release-iphoneos/SFI.app"
+          if [ ! -d "$APP" ]; then
+            APP="$(find build/dd/Build/Products -type d -name 'SFI.app' | head -n 1)"
+          fi
+          if [ -z "$APP" ] || [ ! -d "$APP" ]; then
             echo "Khong tim thay SFI.app"; exit 1
           fi
           echo "Tim thay: $APP"
