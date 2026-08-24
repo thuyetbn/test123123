@@ -18,6 +18,11 @@
 
 extern int server_fd;
 
+/* Prototypes mirroring app/src/main/cpp/main.h of the Android fork.
+ * ciadpi_main is main.c's entrypoint renamed via -Dmain=ciadpi_main. */
+void clear_params(char *line, char **argv);
+int ciadpi_main(int argc, char **argv);
+
 static int g_proxy_running = 0;
 
 struct params default_params = {

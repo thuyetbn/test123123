@@ -18,7 +18,7 @@
 package byedpi
 
 /*
-#cgo darwin CFLAGS: -DNOEPOLL -Dmain=ciadpi_main -O2
+#cgo darwin CFLAGS: -Dmain=ciadpi_main -O2
 #cgo linux CFLAGS: -Dmain=ciadpi_main -O2
 #include <stdlib.h>
 #include "byedpi_shim.h"
