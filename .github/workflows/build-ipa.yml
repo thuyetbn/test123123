@@ -1,0 +1,120 @@
+name: Build unsigned SFI IPA
+
+# ============================================================
+# Workflow build file IPA CHUA KY (unsigned) cua ung dung
+# sing-box cho iOS (SFI) tren runner macOS mien phi cua GitHub,
+# kem tich hop san BYEDPI (ciadpi) ben trong engine libbox.
+#
+# Cach dung:
+#   1. Dat file nay tai: .github/workflows/build-ipa.yml
+#      trong REPO PUBLIC cua ban (chung repo voi thu muc byedpi-libbox/).
+#   2. Vao tab Actions -> chon "Build unsigned SFI IPA" -> Run workflow.
+#   3. Cho ~30-60 phut -> tai artifact "SFI-unsigned-ipa".
+#
+# Bat/tat ByeDPI: input "enable_byedpi" khi Run workflow.
+# ============================================================
+
+on:
+  workflow_dispatch:
+    inputs:
+      sing_box_ref:
+        description: "sing-box ref (tag hoac branch): v1.14.0-rc.1 | testing | ..."
+        required: true
+        default: "v1.14.0-rc.1"
+      libbox_platforms:
+        description: "Nen build cua libbox (ios la du de dong goi IPA)"
+        required: true
+        default: "ios"
+      enable_byedpi:
+        description: "Tich hop ByeDPI vao libbox?"
+        type: boolean
+        required: true
+        default: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 150
+
+    steps:
+      - name: Checkout repo nay (chua workflow + byedpi-libbox)
+        uses: actions/checkout@v4
+        with:
+          path: meta
+
+      - name: Checkout sing-box-for-apple (ung dung SwiftUI)
+        uses: actions/checkout@v4
+        with:
+          repository: SagerNet/sing-box-for-apple
+          ref: dev
+          submodules: recursive
+          path: sing-box-for-apple
+
+      - name: Checkout sing-box (ma nguon Go chua engine libbox)
+        uses: actions/checkout@v4
+        with:
+          repository: SagerNet/sing-box
+          ref: ${{ inputs.sing_box_ref }}
+          fetch-depth: 0
+          path: sing-box
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+          cache-dependency-path: sing-box/go.sum
+
+      - name: Tich hop ByeDPI vao libbox
+        if: ${{ inputs.enable_byedpi }}
+        run: bash meta/byedpi-libbox/apply.sh "$GITHUB_WORKSPACE/sing-box"
+
+      - name: Install gomobile (fork sagernet, phien ban chinh thuc)
+        run: |
+          go install -v github.com/sagernet/gomobile/cmd/gomobile@v0.1.13
+          go install -v github.com/sagernet/gomobile/cmd/gobind@v0.1.13
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # build_libbox -target apple se build Libbox.xcframework
+      # va TU DONG copy sang ../sing-box-for-apple/Libbox.xcframework
+      - name: Build Libbox.xcframework (gomobile bind, mat 15-40 phut)
+        working-directory: sing-box
+        run: |
+          go run ./cmd/internal/build_libbox -target apple -platform "${{ inputs.libbox_platforms }}"
+          test -d ../sing-box-for-apple/Libbox.xcframework
+
+      - name: Build SFI.app (Release, KHONG ky so)
+        working-directory: sing-box-for-apple
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -skipPackagePluginValidation \
+            -project sing-box.xcodeproj \
+            -scheme SFI \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tail -100
+
+      - name: Dong goi thanh file .ipa
+        working-directory: sing-box-for-apple
+        run: |
+          APP="$(find build/dd/Build/Products -maxdepth 3 -type d -name 'SFI.app' | head -n 1)"
+          if [ -z "$APP" ]; then
+            echo "Khong tim thay SFI.app"; exit 1
+          fi
+          echo "Tim thay: $APP"
+          rm -rf Payload
+          mkdir Payload
+          cp -R "$APP" Payload/
+          zip -qry SFI-unsigned.ipa Payload
+          ls -lh SFI-unsigned.ipa
+
+      - name: Upload artifact IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SFI-unsigned-ipa
+          path: sing-box-for-apple/SFI-unsigned.ipa
+          if-no-files-found: error
